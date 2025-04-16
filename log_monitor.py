@@ -1,35 +1,37 @@
 import pandas as pd
 import os
-from sklearn.ensemble import IsolationForest
-from datetime import datetime
+import tkinter as tk
+from tkinter import filedialog, messagebox
 
-def analyze_logs(log_file):
+def analyze_logs(file_path):
     try:
-        df = pd.read_csv(log_file, delimiter=";", usecols=["timestamp", "user", "ip", "event"])
-    except FileNotFoundError:
-        print(f"Error: {log_file} not found. Check /logs folder.")
-        return
-    
-    ip_counts = df.groupby("ip").size().reset_index(name="attempts")
-    model = IsolationForest(contamination=0.05, random_state=42)
-    anomalies = model.fit_predict(ip_counts[["attempts"]])
-    risky_ips = ip_counts[anomalies == -1]["ip"].tolist()
-    
-    if risky_ips:
-        alert = f"{datetime.now()}: Suspicious IPs detected: {risky_ips}"
-        print(alert)
-        with open("alerts.txt", "a") as f:
-            f.write(alert + "\n")
-    else:
-        print("All clear, no issues.")
+        if file_path.endswith(".csv"):
+            df = pd.read_csv(file_path, delimiter=";")
+        elif file_path.endswith(".json"):
+            df = pd.read_json(file_path)
+        else:
+            raise ValueError("Unsupported file format. Please use CSV or JSON.")
+        
+        ip_counts = df.groupby("ip").size().reset_index(name="attempts")
+        risky_ips = ip_counts[ip_counts["attempts"] > 5]["ip"].tolist()
+        
+        return f"Suspicious IPs: {', '.join(risky_ips)}" if risky_ips else "No suspicious activity detected."
+    except Exception as e:
+        return f"Error: {e}"
+
+def show_gui():
+    def load_file():
+        file_path = filedialog.askopenfilename()
+        if file_path:
+            result = analyze_logs(file_path)
+            messagebox.showinfo("Analysis Result", result)
+
+    root = tk.Tk()
+    root.title("Windows Server Log Monitor")
+
+    tk.Label(root, text="Log Monitor").pack(pady=10)
+    tk.Button(root, text="Load Log File", command=load_file).pack(pady=5)
+    root.mainloop()
 
 if __name__ == "__main__":
-    log_path = "logs/security_log.csv"
-    print("Starting Windows Server Log Monitor...")
-    while True:
-        if os.path.exists(log_path):
-            analyze_logs(log_path)
-        else:
-            print("Waiting for log files...")
-        import time
-        time.sleep(10)
+    show_gui()
